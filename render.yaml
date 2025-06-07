@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: univendorpro
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CLIENT_URL
+        value: https://univendorpro.onrender.com
+      # Add other environment variables as needed
+    healthCheckPath: /api/health
+    autoDeploy: true
