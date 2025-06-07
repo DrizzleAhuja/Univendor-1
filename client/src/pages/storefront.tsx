@@ -10,6 +10,8 @@ import { ShoppingCart } from "@/components/shopping-cart";
 import { CheckoutModal } from "@/components/checkout-modal";
 import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useGuestCart } from "@/hooks/useGuestCart";
+import { X } from "lucide-react";
 
 // Dummy products data with color variants
 const dummyProducts = {
@@ -107,56 +109,77 @@ const dummyProducts = {
   ],
 };
 
-function ProductCard({ product }) {
+function ProductCard({ product, onGuestAddToCart, guestAddToCart }) {
   const [selectedColor, setSelectedColor] = useState(product.colors[0]);
   const [selectedSize, setSelectedSize] = useState("");
   const [error, setError] = useState("");
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   const addToCartMutation = useMutation({
     mutationFn: async () => {
-      if (!user) {
-        window.location.href = "/api/login";
-        return;
+      if (!selectedSize) {
+        throw new Error("Please select a size");
       }
-      
-      const productId = Number(product.id);
-      if (isNaN(productId)) {
-        throw new Error("Invalid product ID");
+      if (!selectedColor) {
+        throw new Error("Please select a color");
       }
-      
-      await apiRequest("POST", "/api/cart", {
-        productId,
-        quantity: 1,
-        size: selectedSize,
-        color: selectedColor.name
-      });
+
+      if (isAuthenticated) {
+        const response = await fetch("/api/cart", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            productId: product.id,
+            quantity: 1,
+            size: selectedSize,
+            color: selectedColor.name || selectedColor,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to add item to cart");
+        }
+
+        return response.json();
+      } else {
+        // Handle guest cart
+        const guestCartItem = {
+          id: Math.random().toString(36).substr(2, 9),
+          productId: product.id.toString(),
+          quantity: 1,
+          size: selectedSize,
+          color: selectedColor.name || selectedColor,
+          name: product.name,
+          price: product.price.toString(),
+          imageUrl: product.imageUrl || selectedColor.image || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=80&h=80&fit=crop"
+        };
+        guestAddToCart(guestCartItem);
+        if (onGuestAddToCart) onGuestAddToCart();
+        return { success: true };
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
       toast({
-        title: "Added to cart",
-        description: `${product.name} - Size: ${selectedSize}, Color: ${selectedColor.name} added to your cart`,
+        title: "Success",
+        description: "Item added to cart",
       });
-      setError("");
+      if (isAuthenticated) {
+        queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+      }
     },
-    onError: (error: any) => {
-      console.error("Add to cart error:", error);
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: error?.message || "Failed to add item to cart. Please try again.",
+        description: error.message,
         variant: "destructive",
       });
     },
   });
 
   const handleAddToCart = () => {
-    if (!user) {
-      window.location.href = "/api/login";
-      return;
-    }
-
     if (!selectedSize || !selectedColor) {
       setError("Please select both size and color before adding to cart");
       toast({
@@ -273,15 +296,75 @@ function ProductCard({ product }) {
 export default function Storefront() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const { cartItems: guestCartItems, addToCart: addToGuestCart } = useGuestCart();
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("electronics");
+  const [selectedSize, setSelectedSize] = useState("");
+  const [selectedColor, setSelectedColor] = useState("");
 
   const { data: cartItems = [] } = useQuery({
     queryKey: ["/api/cart"],
-    enabled: !!user,
+    enabled: isAuthenticated,
   });
 
-  const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const items = isAuthenticated ? cartItems : guestCartItems;
+  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+
+  const handleAddToCart = async (product: any) => {
+    if (!isAuthenticated) {
+      // Handle guest cart
+      addToGuestCart({
+        id: Math.random().toString(36).substr(2, 9),
+        productId: product.id,
+        quantity: 1,
+        price: product.price,
+        name: product.name,
+        imageUrl: product.imageUrl,
+        size: selectedSize,
+        color: selectedColor
+      });
+      toast({
+        title: "Added to Cart",
+        description: "Item has been added to your cart",
+      });
+      // Open cart sidebar after adding item
+      setIsCartOpen(true);
+      return;
+    }
+
+    // Existing logged-in user cart logic
+    try {
+      const response = await fetch("/api/cart", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          productId: product.id,
+          quantity: 1,
+          size: selectedSize,
+          color: selectedColor,
+        }),
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add to cart");
+      }
+
+      toast({
+        title: "Added to Cart",
+        description: "Item has been added to your cart",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add item to cart",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -293,11 +376,16 @@ export default function Storefront() {
               <h1 className="text-xl font-bold text-gray-900 cursor-pointer">SaaSCommerce</h1>
             </Link>
             <div className="flex items-center space-x-4">
-              {isAuthenticated && (
-                <div className="relative cursor-pointer" onClick={() => setIsCartOpen(true)}>
-                  <i className="fas fa-shopping-cart text-gray-600 text-lg hover:text-primary"></i>
-                </div>
-              )}
+              <div className="flex items-center gap-4">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative"
+                  onClick={() => setIsCartOpen(true)}
+                >
+                  <ShoppingCart className="h-5 w-5" />
+                </Button>
+              </div>
               {isAuthenticated ? (
                 <div className="flex items-center space-x-2">
                   <Avatar className="w-8 h-8">
@@ -377,7 +465,7 @@ export default function Storefront() {
           <TabsContent value="electronics" className="mt-0">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {dummyProducts.electronics.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard key={product.id} product={product} onGuestAddToCart={() => setIsCartOpen(true)} guestAddToCart={addToGuestCart} />
               ))}
             </div>
           </TabsContent>
@@ -385,7 +473,7 @@ export default function Storefront() {
           <TabsContent value="fashion" className="mt-0">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {dummyProducts.fashion.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard key={product.id} product={product} onGuestAddToCart={() => setIsCartOpen(true)} guestAddToCart={addToGuestCart} />
               ))}
             </div>
           </TabsContent>
@@ -393,7 +481,7 @@ export default function Storefront() {
           <TabsContent value="homeGarden" className="mt-0">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {dummyProducts.homeGarden.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard key={product.id} product={product} onGuestAddToCart={() => setIsCartOpen(true)} guestAddToCart={addToGuestCart} />
               ))}
             </div>
           </TabsContent>
@@ -401,9 +489,79 @@ export default function Storefront() {
       </div>
 
       {/* Shopping Cart Sidebar */}
-      {isCartOpen && (
-        <ShoppingCart onClose={() => setIsCartOpen(false)} />
-      )}
+      <div className={`w-80 bg-white border-l border-gray-200 fixed right-0 top-0 h-full transform transition-transform duration-300 ease-in-out ${isCartOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="p-4 border-b">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold">Shopping Cart ({totalItems} items)</h2>
+            <button
+              onClick={() => setIsCartOpen(false)}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 overflow-y-auto h-[calc(100vh-8rem)]">
+          {items.length === 0 ? (
+            <div className="text-center py-8">
+              <ShoppingCart className="h-12 w-12 mx-auto text-gray-400" />
+              <p className="mt-4 text-gray-500">Your cart is empty</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {items.map((item) => (
+                <div key={item.id} className="flex gap-4 p-4 border rounded-lg">
+                  <img
+                    src={item.imageUrl}
+                    alt={item.name}
+                    className="w-20 h-20 object-cover rounded"
+                  />
+                  <div className="flex-1">
+                    <h3 className="font-medium">{item.name}</h3>
+                    <p className="text-sm text-gray-500">
+                      {item.size && `Size: ${item.size}`}
+                      {item.color && ` • Color: ${item.color}`}
+                    </p>
+                    <div className="flex justify-between items-center mt-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="p-1 border rounded"
+                          onClick={() => handleUpdateQuantity(item.id, Math.max(1, item.quantity - 1))}
+                        >
+                          -
+                        </button>
+                        <span>{item.quantity}</span>
+                        <button
+                          className="p-1 border rounded"
+                          onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <p className="font-medium">${parseFloat(item.price) * item.quantity}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {items.length > 0 && (
+          <div className="p-4 border-t">
+            <div className="flex justify-between mb-4">
+              <span>Total</span>
+              <span className="font-medium">
+                ${items.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0).toFixed(2)}
+              </span>
+            </div>
+            <Button className="w-full" onClick={() => window.location.href = "/cart"}>
+              View Cart
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
