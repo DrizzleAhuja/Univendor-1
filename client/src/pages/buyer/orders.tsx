@@ -52,7 +52,7 @@ export default function BuyerOrders() {
               <div className="text-center py-8">
                 <i className="fas fa-shopping-cart text-gray-400 text-4xl mb-4"></i>
                 <p className="text-gray-600 mb-4">No orders yet. Start shopping!</p>
-                <Link href="/storefront">
+                <Link href="/store">
                   <Button>Browse Stores</Button>
                 </Link>
               </div>
