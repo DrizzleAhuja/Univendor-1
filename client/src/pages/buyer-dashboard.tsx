@@ -110,7 +110,7 @@ export default function BuyerDashboard() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>Order History</CardTitle>
-              <Link href="/storefront">
+              <Link href="/store">
                 <Button variant="outline" size="sm">
                   <i className="fas fa-shopping-cart mr-2"></i>
                   Continue Shopping
@@ -123,7 +123,7 @@ export default function BuyerDashboard() {
               <div className="text-center py-8">
                 <i className="fas fa-shopping-cart text-gray-400 text-4xl mb-4"></i>
                 <p className="text-gray-600 mb-4">No orders yet. Start shopping!</p>
-                <Link href="/storefront">
+                <Link href="/store">
                   <Button>Browse Stores</Button>
                 </Link>
               </div>
