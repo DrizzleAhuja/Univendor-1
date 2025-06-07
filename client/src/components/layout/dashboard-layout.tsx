@@ -130,13 +130,24 @@ function AppSidebar({ isCollapsed, onToggleCollapse }: AppSidebarProps) {
       
       case 'buyer':
       default:
-        return [
+        const buyerItems = [
           ...commonItems,
           { icon: Store, label: "Browse Stores", href: "/store" },
-          { icon: ShoppingCart, label: "My Cart", href: "/buyer/cart", badge: cartItemCount },
           { icon: ShoppingBag, label: "My Orders", href: "/buyer/orders" },
           { icon: Settings, label: "Account Settings", href: "/buyer/settings" },
         ];
+
+        // Only show cart with badge if not in /store route
+        if (!location.startsWith('/store')) {
+          buyerItems.splice(2, 0, { 
+            icon: ShoppingCart, 
+            label: "My Cart", 
+            href: "/buyer/cart", 
+            badge: cartItemCount 
+          });
+        }
+
+        return buyerItems;
     }
   };
 

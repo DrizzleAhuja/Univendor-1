@@ -296,11 +296,6 @@ export default function Storefront() {
               {isAuthenticated && (
                 <div className="relative cursor-pointer" onClick={() => setIsCartOpen(true)}>
                   <i className="fas fa-shopping-cart text-gray-600 text-lg hover:text-primary"></i>
-                  {cartItemCount > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-accent text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                      {cartItemCount}
-                    </span>
-                  )}
                 </div>
               )}
               {isAuthenticated ? (
