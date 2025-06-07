@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -25,9 +25,18 @@ import AdminSettings from "@/pages/admin/settings";
 import SellerCategories from "@/pages/seller/categories";
 import Cart from "@/pages/buyer/cart";
 import BuyerOrders from "@/pages/buyer/orders";
+import { useEffect } from "react";
 
 function Router() {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+
+  // Handle root route redirection
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user?.role === 'buyer') {
+      setLocation('/buyer-dashboard');
+    }
+  }, [isLoading, isAuthenticated, user, setLocation]);
 
   return (
     <Switch>
@@ -36,14 +45,16 @@ function Router() {
           <Route path="/" component={Landing} />
           <Route path="/login" component={Login} />
           <Route path="/store/:domain?" component={Storefront} />
+          <Route path="/cart" component={Cart} />
         </>
       ) : (
         <>
           <Route path="/" component={() => {
             if (user?.role === 'super_admin') return <SuperAdminDashboard />;
             if (user?.role === 'seller') return <SellerDashboard />;
-            return <BuyerDashboard />;
+            return <Landing />;
           }} />
+          <Route path="/buyer-dashboard" component={BuyerDashboard} />
           <Route path="/admin" component={SuperAdminDashboard} />
           <Route path="/admin/users" component={AdminUsers} />
           <Route path="/admin/vendors" component={AdminVendors} />
@@ -66,6 +77,7 @@ function Router() {
           <Route path="/buyer/cart" component={Cart} />
           <Route path="/buyer/orders" component={BuyerOrders} />
           <Route path="/store/:domain?" component={Storefront} />
+          <Route path="/cart" component={Cart} />
         </>
       )}
       <Route component={NotFound} />
