@@ -88,7 +88,7 @@ function AppSidebar({ isCollapsed, onToggleCollapse }: AppSidebarProps) {
     if (!user) return [];
 
     const commonItems = [
-      { icon: Home, label: "Dashboard", href: "/" },
+      { icon: Home, label: "Dashboard", href: (user?.role === 'buyer' ? "/buyer-dashboard" : "/") },
     ];
 
     switch ((user as any)?.role) {
@@ -133,20 +133,10 @@ function AppSidebar({ isCollapsed, onToggleCollapse }: AppSidebarProps) {
         const buyerItems = [
           ...commonItems,
           { icon: Store, label: "Browse Stores", href: "/store" },
+          { icon: ShoppingCart, label: "My Cart", href: "/buyer/cart", badge: cartItemCount },
           { icon: ShoppingBag, label: "My Orders", href: "/buyer/orders" },
           { icon: Settings, label: "Account Settings", href: "/buyer/settings" },
         ];
-
-        // Only show cart with badge if not in /store route
-        if (!location.startsWith('/store')) {
-          buyerItems.splice(2, 0, { 
-            icon: ShoppingCart, 
-            label: "My Cart", 
-            href: "/buyer/cart", 
-            badge: cartItemCount 
-          });
-        }
-
         return buyerItems;
     }
   };
@@ -176,16 +166,13 @@ function AppSidebar({ isCollapsed, onToggleCollapse }: AppSidebarProps) {
         <ul className="space-y-1">
           {menuItems.map((item) => (
             <li key={item.href}>
-              <Link href={item.href}>
-                <div className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors cursor-pointer ${
-                  location === item.href 
-                    ? 'bg-primary text-white' 
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}>
-                  <item.icon className="w-5 h-5 flex-shrink-0" />
-                  {!isCollapsed && <span className="text-sm">{item.label}</span>}
-                </div>
-              </Link>
+              <SidebarItem 
+                icon={item.icon} 
+                label={item.label} 
+                href={item.href} 
+                active={location === item.href} 
+                badge={item.badge}
+              />
             </li>
           ))}
         </ul>
