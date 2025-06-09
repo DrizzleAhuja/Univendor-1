@@ -196,7 +196,11 @@ export function ShoppingCart({ isOpen, onClose, cartItems = [], isGuest = false 
                   <Button 
                     className="w-full"
                     size="lg"
-                    onClick={() => window.location.href = "/api/login"}
+                    onClick={() => {
+                      // Store current URL to redirect back after login
+                      localStorage.setItem('redirect_after_login', '/cart');
+                      window.location.href = "/login";
+                    }}
                   >
                     Login to Checkout
                   </Button>

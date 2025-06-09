@@ -10,6 +10,7 @@ import SuperAdminDashboard from "@/pages/super-admin-dashboard";
 import SellerDashboard from "@/pages/seller-dashboard";
 import BuyerDashboard from "@/pages/buyer-dashboard";
 import Storefront from "@/pages/storefront";
+import ProductDetails from "@/pages/product-details";
 import NotFound from "@/pages/not-found";
 import AdminUsers from "@/pages/admin/users";
 import AdminVendors from "@/pages/admin/vendors";
@@ -37,6 +38,7 @@ function Router() {
           <Route path="/" component={Storefront} />
           <Route path="/login" component={Login} />
           <Route path="/store/:domain?" component={Storefront} />
+          <Route path="/product/:id" component={ProductDetails} />
           <Route path="/cart" component={Cart} />
         </>
       ) : (
@@ -65,6 +67,7 @@ function Router() {
           <Route path="/buyer/cart" component={Cart} />
           <Route path="/buyer/orders" component={BuyerOrders} />
           <Route path="/store/:domain?" component={Storefront} />
+          <Route path="/product/:id" component={ProductDetails} />
           <Route path="/cart" component={Cart} />
         </>
       )}

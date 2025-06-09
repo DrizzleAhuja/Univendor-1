@@ -93,7 +93,9 @@ export default function Cart() {
 
   const handleCheckout = () => {
     if (!isAuthenticated) {
-      window.location.href = "/api/login";
+      // Store current URL to redirect back after login
+      localStorage.setItem('redirect_after_login', '/cart');
+      window.location.href = "/login";
       return;
     }
     setIsCheckoutOpen(true);
@@ -121,7 +123,7 @@ export default function Cart() {
               <Button 
                 variant="outline" 
                 className="mt-4"
-                onClick={() => window.location.href = "/store"}
+                onClick={() => window.location.href = "/storefront"}
               >
                 Continue Shopping
               </Button>

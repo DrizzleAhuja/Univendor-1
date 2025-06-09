@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { sendOtpSchema, verifyOtpSchema, registerUserSchema } from "@shared/schema";
 import { z } from "zod";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
 
 type LoginStep = "email" | "otp" | "register";
 
@@ -27,9 +28,12 @@ async function migrateGuestCartToUserCart() {
           color: item.color,
         });
       }
+      // Clear guest cart after successful migration
       localStorage.removeItem('guest_cart');
     }
-  } catch {}
+  } catch (error) {
+    console.error('Failed to migrate guest cart:', error);
+  }
 }
 
 export default function Login() {
@@ -38,6 +42,8 @@ export default function Login() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const { login } = useAuth();
+  const navigate = useLocation();
 
   // Email form
   const emailForm = useForm({
@@ -110,7 +116,7 @@ export default function Login() {
           title: "Login Successful",
           description: "Welcome back!",
         });
-        await migrateGuestCartToUserCart();
+        await migrateGuestCartToUserCart(); // Migrate guest cart after successful login
         queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
         // Redirect based on user role
         if (data.user.role === 'buyer') {
@@ -143,7 +149,7 @@ export default function Login() {
         title: "Registration Successful",
         description: "Welcome to the platform!",
       });
-      await migrateGuestCartToUserCart();
+      await migrateGuestCartToUserCart(); // Migrate guest cart after successful registration
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       // Redirect to homepage for new registrations
       setLocation("/");
@@ -168,6 +174,25 @@ export default function Login() {
 
   const onRegisterSubmit = (data: z.infer<typeof registerUserSchema>) => {
     registerMutation.mutate(data);
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await login(email);
+      await migrateGuestCartToUserCart(); // Migrate guest cart after successful login
+      
+      // Check for redirect URL
+      const redirectUrl = localStorage.getItem('redirect_after_login') || '/storefront';
+      localStorage.removeItem('redirect_after_login');
+      navigate(redirectUrl);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to login. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

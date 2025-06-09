@@ -30,11 +30,18 @@ const checkoutSchema = z.object({
 interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
-  cartItems: any[];
+  cartItems?: any[];
   onOrderComplete: () => void;
+  total?: number;
 }
 
-export function CheckoutModal({ isOpen, onClose, cartItems, onOrderComplete }: CheckoutModalProps) {
+export function CheckoutModal({ 
+  isOpen, 
+  onClose, 
+  cartItems = [], 
+  onOrderComplete,
+  total = 0 
+}: CheckoutModalProps) {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -74,7 +81,7 @@ export function CheckoutModal({ isOpen, onClose, cartItems, onOrderComplete }: C
   });
 
   const onSubmit = async (data: z.infer<typeof checkoutSchema>) => {
-    if (cartItems.length === 0) {
+    if (!cartItems || cartItems.length === 0) {
       toast({
         title: "Error",
         description: "Your cart is empty",
@@ -91,13 +98,14 @@ export function CheckoutModal({ isOpen, onClose, cartItems, onOrderComplete }: C
     onClose();
   };
 
-  const subtotal = cartItems.reduce((sum, item) => {
+  const subtotal = total || (cartItems?.reduce((sum, item) => {
     const price = item.product?.price ?? item.price;
     return sum + (parseFloat(price) * item.quantity);
-  }, 0);
+  }, 0) ?? 0);
+  
   const shipping = 9.99;
   const tax = subtotal * 0.08; // 8% tax
-  const total = subtotal + shipping + tax;
+  const finalTotal = subtotal + shipping + tax;
 
   if (!isOpen) return null;
 
@@ -258,7 +266,7 @@ export function CheckoutModal({ isOpen, onClose, cartItems, onOrderComplete }: C
                   <div className="border-t border-gray-200 pt-2">
                     <div className="flex justify-between text-lg font-semibold">
                       <span>Total:</span>
-                      <span>₹{total.toFixed(2)}</span>
+                      <span>₹{finalTotal.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
@@ -267,10 +275,9 @@ export function CheckoutModal({ isOpen, onClose, cartItems, onOrderComplete }: C
               <Button 
                 type="submit" 
                 className="w-full"
-                size="lg"
-                disabled={true}
+                disabled={isProcessing || !cartItems || cartItems.length === 0}
               >
-                Checkout Disabled
+                {isProcessing ? "Processing..." : "Place Order"}
               </Button>
             </form>
           </Form>

@@ -12,6 +12,9 @@ import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useGuestCart } from "@/hooks/useGuestCart";
 import { X, ShoppingCart as ShoppingCartIcon } from "lucide-react";
+import { useLocation } from "wouter";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Settings, LogOut } from "lucide-react";
 
 // Dummy products data with color variants
 const dummyProducts = {
@@ -109,187 +112,145 @@ const dummyProducts = {
   ],
 };
 
-function ProductCard({ product, onGuestAddToCart, guestAddToCart }) {
-  const [selectedColor, setSelectedColor] = useState(product.colors[0]);
-  const [selectedSize, setSelectedSize] = useState("");
-  const [error, setError] = useState("");
-  const { toast } = useToast();
-  const { user, isAuthenticated } = useAuth();
+function ProductCard({ product }: { product: any }) {
+  const [, setLocation] = useLocation();
 
-  const addToCartMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedSize) {
-        throw new Error("Please select a size");
-      }
-      if (!selectedColor) {
-        throw new Error("Please select a color");
-      }
-
-      if (isAuthenticated) {
-        const response = await fetch("/api/cart", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            productId: product.id,
-            quantity: 1,
-            size: selectedSize,
-            color: selectedColor.name || selectedColor,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to add item to cart");
-        }
-
-        return response.json();
-      } else {
-        // Handle guest cart
-        const guestCartItem = {
-          id: Math.random().toString(36).substr(2, 9),
-          productId: product.id.toString(),
-          quantity: 1,
-          size: selectedSize,
-          color: selectedColor.name || selectedColor,
-          name: product.name,
-          price: product.price.toString(),
-          imageUrl: product.imageUrl || selectedColor.image || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=80&h=80&fit=crop"
-        };
-        guestAddToCart(guestCartItem);
-        if (onGuestAddToCart) onGuestAddToCart();
-        return { success: true };
-      }
-    },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Item added to cart",
-      });
-      if (isAuthenticated) {
-        queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
-      }
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleAddToCart = () => {
-    if (!selectedSize || !selectedColor) {
-      setError("Please select both size and color before adding to cart");
-      toast({
-        title: "Selection Required",
-        description: "Please select both size and color before adding to cart",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    addToCartMutation.mutate();
+  const handleClick = () => {
+    setLocation(`/product/${product.id}`);
   };
 
   return (
-    <Card className="group overflow-hidden">
-      <div className="aspect-square overflow-hidden bg-gray-100 relative">
+    <div 
+      className="group relative bg-white rounded-lg shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+      onClick={handleClick}
+    >
+      <div className="aspect-square overflow-hidden">
         <img
-          src={selectedColor.image}
+          src={product.colors[0].image}
           alt={product.name}
-          className="object-cover w-full h-full transform group-hover:scale-105 transition-transform duration-300"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
-        <div className="absolute bottom-4 left-4 right-4">
-          <div className="flex items-center justify-center space-x-2 bg-white/90 backdrop-blur-sm p-2 rounded-lg">
-            {product.colors.map((color) => (
-              <button
-                key={color.name}
-                className={`w-6 h-6 rounded-full border-2 transition-all ${
-                  selectedColor.name === color.name ? 'border-primary scale-110' : 'border-transparent hover:scale-110'
-                }`}
-                style={{ backgroundColor: color.hex }}
-                onMouseEnter={() => setSelectedColor(color)}
-                onClick={() => setSelectedColor(color)}
-                title={color.name}
-              />
-            ))}
+      </div>
+      <div className="p-4">
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">{product.name}</h3>
+        <p className="text-sm text-gray-500 mb-2">{product.vendor}</p>
+        <div className="flex items-center justify-between">
+          <span className="text-lg font-bold text-gray-900">₹{product.price}</span>
+          <div className="flex items-center">
+            <i className="fas fa-star text-yellow-400 mr-1"></i>
+            <span className="text-sm text-gray-600">{product.rating}</span>
           </div>
         </div>
       </div>
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start mb-2">
-          <div>
-            <h3 className="font-semibold text-gray-900">{product.name}</h3>
-            <p className="text-sm text-gray-500">{product.vendor}</p>
+    </div>
+  );
+}
+
+interface NavbarProps {
+  isAuthenticated?: boolean;
+  user?: any;
+  cartItems?: any[];
+  isCartOpen?: boolean;
+  setIsCartOpen?: (isOpen: boolean) => void;
+}
+
+export function Navbar({ 
+  isAuthenticated = false, 
+  user, 
+  cartItems = [], 
+  isCartOpen = false, 
+  setIsCartOpen = () => {} 
+}: NavbarProps) {
+  const totalItems = cartItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+  const [, setLocation] = useLocation();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      setLocation(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  return (
+    <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center h-16 gap-4">
+          {/* Logo */}
+          <Link href="/">
+            <h1 className="text-2xl font-bold text-blue-700 cursor-pointer mr-8">SaaSCommerce</h1>
+          </Link>
+          {/* Search Bar */}
+          <form onSubmit={handleSearch} className="flex-1 flex justify-center">
+            <input
+              type="text"
+              placeholder="Search for products, brands and more"
+              className="w-full max-w-xl px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{ minWidth: 200 }}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </form>
+          {/* Cart Icon and Auth Buttons */}
+          <div className="flex items-center ml-8 gap-4">
+            <button
+              className="relative p-2 rounded hover:bg-gray-100 transition"
+              aria-label="View Cart"
+              onClick={() => setIsCartOpen(true)}
+            >
+              <ShoppingCart className="h-6 w-6 text-blue-700" />
+              {totalItems > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {totalItems}
+                </span>
+              )}
+            </button>
+            {isAuthenticated ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={user?.profileImageUrl || undefined} />
+                      <AvatarFallback>
+                        {user?.firstName?.[0] || user?.email?.[0] || 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end">
+                  <div className="flex items-center justify-start gap-2 p-2">
+                    <div className="flex flex-col space-y-1 leading-none">
+                      <p className="font-medium">{user?.firstName || 'User'}</p>
+                      <p className="w-[200px] truncate text-sm text-gray-500">
+                        {user?.email}
+                      </p>
+                    </div>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem>
+                    <Settings className="w-4 h-4 mr-2" />
+                    Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => window.location.href = "/api/logout"}>
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button
+                onClick={() => window.location.href = "/login"}
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded"
+              >
+                Login
+              </Button>
+            )}
           </div>
-          <span className="font-bold text-primary">${product.price}</span>
         </div>
-        <p className="text-sm text-gray-600 mb-4">{product.description}</p>
-        
-        {/* Size Selection */}
-        {product.sizes && (
-          <div className="mb-4">
-            <label className="text-sm font-medium text-gray-700 mb-2 block">
-              Size
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {product.sizes.map((size) => (
-                <button
-                  key={size}
-                  onClick={() => setSelectedSize(size)}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors
-                    ${selectedSize === size 
-                      ? 'bg-primary text-white' 
-                      : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                    }`}
-                >
-                  {size}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Color Selection Label */}
-        {product.colors && (
-          <div className="mb-4">
-            <label className="text-sm font-medium text-gray-700 mb-2 block">
-              Color: {selectedColor.name}
-            </label>
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <p className="text-sm text-red-500 mb-4">{error}</p>
-        )}
-
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="flex items-center">
-              {[...Array(5)].map((_, i) => (
-                <i
-                  key={i}
-                  className={`fas fa-star text-sm ${
-                    i < Math.floor(product.rating) ? 'text-yellow-400' : 'text-gray-300'
-                  }`}
-                />
-              ))}
-            </div>
-            <span className="text-sm text-gray-500 ml-2">({product.reviews})</span>
-          </div>
-          <Button 
-            onClick={handleAddToCart} 
-            size="sm"
-            variant={!selectedSize || !selectedColor ? "outline" : "default"}
-          >
-            Add to Cart
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </header>
   );
 }
 
@@ -456,7 +417,15 @@ export default function Storefront() {
   };
 
   // Handle checkout modal
-  const handleCheckout = () => setIsCheckoutOpen(true);
+  const handleCheckout = () => {
+    if (!isAuthenticated) {
+      // Store current URL to redirect back after login
+      localStorage.setItem('redirect_after_login', '/cart');
+      window.location.href = "/login";
+      return;
+    }
+    setIsCheckoutOpen(true);
+  };
   const handleOrderComplete = () => {
     setIsCheckoutOpen(false);
     queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
@@ -611,7 +580,7 @@ export default function Storefront() {
         {/* Products Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {showProducts && showProducts.length > 0 && showProducts.map((product) => (
-            <ProductCard key={product.id} product={product} onGuestAddToCart={() => setIsCartOpen(true)} guestAddToCart={addToGuestCart} />
+            <ProductCard key={product.id} product={product} />
           ))}
         </div>
       </div>
@@ -727,12 +696,14 @@ export default function Storefront() {
           </div>
         )}
         {/* Checkout Modal */}
-        <CheckoutModal
-          isOpen={isCheckoutOpen}
-          onClose={() => setIsCheckoutOpen(false)}
-          cartItems={displayItems}
-          onOrderComplete={handleOrderComplete}
-        />
+        {isAuthenticated && (
+          <CheckoutModal
+            isOpen={isCheckoutOpen}
+            onClose={() => setIsCheckoutOpen(false)}
+            cartItems={displayItems}
+            onOrderComplete={handleOrderComplete}
+          />
+        )}
       </div>
     </div>
   );

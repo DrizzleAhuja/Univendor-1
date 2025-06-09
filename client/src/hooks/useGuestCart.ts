@@ -3,12 +3,12 @@ import { useState, useEffect } from 'react';
 interface CartItem {
   id: string;
   productId: string;
-  quantity: number;
-  price: string;
   name: string;
+  price: string;
   imageUrl: string;
-  size?: string;
   color?: string;
+  size?: string;
+  quantity: number;
 }
 
 export function useGuestCart() {
@@ -28,10 +28,28 @@ export function useGuestCart() {
   }, [cartItems]);
 
   const addToCart = (item: CartItem) => {
-    setCartItems(prevItems => [
-      ...prevItems,
-      { ...item, id: Math.random().toString(36).substr(2, 9) }
-    ]);
+    setCartItems(prevItems => {
+      // Check if item already exists with same color and size
+      const existingItemIndex = prevItems.findIndex(
+        existingItem => 
+          existingItem.productId === item.productId && 
+          existingItem.color === item.color && 
+          existingItem.size === item.size
+      );
+
+      if (existingItemIndex >= 0) {
+        // Update quantity if item exists
+        const updatedItems = [...prevItems];
+        updatedItems[existingItemIndex] = {
+          ...updatedItems[existingItemIndex],
+          quantity: updatedItems[existingItemIndex].quantity + item.quantity
+        };
+        return updatedItems;
+      }
+
+      // Add new item if it doesn't exist
+      return [...prevItems, { ...item, id: Math.random().toString(36).substr(2, 9) }];
+    });
   };
 
   const removeFromCart = (itemId: string) => {
@@ -51,7 +69,7 @@ export function useGuestCart() {
   };
 
   const getCartTotal = () => {
-    return cartItems.reduce((total, item) => total + (item.product.price * item.quantity), 0);
+    return cartItems.reduce((total, item) => total + (parseFloat(item.price) * item.quantity), 0);
   };
 
   return {
