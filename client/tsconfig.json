@@ -27,10 +27,18 @@
             "@/*": [
                 "src/*"
             ]
-        }
+        },
+        /* Type Definitions */
+        "types": [
+            "vite/client",
+            "node"
+        ],
+        "allowJs": true,
+        "esModuleInterop": true
     },
     "include": [
-        "src"
+        "src",
+        "vite.config.ts"
     ],
     "references": [
         {
