@@ -91,9 +91,10 @@ export function CheckoutModal({ isOpen, onClose, cartItems, onOrderComplete }: C
     onClose();
   };
 
-  const subtotal = cartItems.reduce((sum, item) => 
-    sum + (parseFloat(item.product.price) * item.quantity), 0
-  );
+  const subtotal = cartItems.reduce((sum, item) => {
+    const price = item.product?.price ?? item.price;
+    return sum + (parseFloat(price) * item.quantity);
+  }, 0);
   const shipping = 9.99;
   const tax = subtotal * 0.08; // 8% tax
   const total = subtotal + shipping + tax;

@@ -25,18 +25,10 @@ import AdminSettings from "@/pages/admin/settings";
 import SellerCategories from "@/pages/seller/categories";
 import Cart from "@/pages/buyer/cart";
 import BuyerOrders from "@/pages/buyer/orders";
-import { useEffect } from "react";
 
 function Router() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const [, setLocation] = useLocation();
-
-  // Handle root route redirection
-  useEffect(() => {
-    if (!isLoading && isAuthenticated && user?.role === 'buyer') {
-      setLocation('/buyer-dashboard');
-    }
-  }, [isLoading, isAuthenticated, user, setLocation]);
 
   return (
     <Switch>

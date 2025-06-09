@@ -19,38 +19,82 @@ export function ShoppingCart({ isOpen, onClose, cartItems = [], isGuest = false 
   const { updateQuantity: updateGuestQuantity, removeFromCart: removeFromGuestCart, getCartTotal: getGuestCartTotal } = useGuestCart();
 
   const updateQuantityMutation = useMutation({
-    mutationFn: async ({ productId, quantity }: { productId: number; quantity: number }) => {
-      await apiRequest("PUT", `/api/cart/${productId}`, { quantity });
+    mutationFn: async ({ cartItemId, quantity }: { cartItemId: number; quantity: number }) => {
+      const response = await apiRequest("PUT", `/api/cart/${cartItemId}`, { quantity });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update cart item");
+      }
+      return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+    onMutate: async ({ cartItemId, quantity }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["/api/cart"] });
+
+      // Snapshot the previous value
+      const previousCart = queryClient.getQueryData(["/api/cart"]);
+
+      // Optimistically update to the new value
+      queryClient.setQueryData(["/api/cart"], (old: any) =>
+        old.map((item: any) =>
+          Number(item.id) === cartItemId ? { ...item, quantity } : item
+        )
+      );
+
+      // Return a context object with the snapshotted value
+      return { previousCart };
     },
-    onError: () => {
+    onError: (err, variables, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      queryClient.setQueryData(["/api/cart"], context?.previousCart);
       toast({
         title: "Error",
-        description: "Failed to update cart item",
+        description: err.message || "Failed to update cart item",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure cache is in sync
+      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
     },
   });
 
   const removeItemMutation = useMutation({
-    mutationFn: async (productId: number) => {
-      await apiRequest("DELETE", `/api/cart/${productId}`);
+    mutationFn: async (cartItemId: number) => {
+      const response = await apiRequest("DELETE", `/api/cart/${cartItemId}`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to remove item from cart");
+      }
+      return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
-      toast({
-        title: "Removed",
-        description: "Item removed from cart",
-      });
+    onMutate: async (cartItemId) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["/api/cart"] });
+
+      // Snapshot the previous value
+      const previousCart = queryClient.getQueryData(["/api/cart"]);
+
+      // Optimistically update to the new value
+      queryClient.setQueryData(["/api/cart"], (old: any) => 
+        old.filter((item: any) => Number(item.id) !== cartItemId)
+      );
+
+      // Return a context object with the snapshotted value
+      return { previousCart };
     },
-    onError: () => {
+    onError: (err, cartItemId, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      queryClient.setQueryData(["/api/cart"], context?.previousCart);
       toast({
         title: "Error",
-        description: "Failed to remove item from cart",
+        description: err.message || "Failed to remove item from cart",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure cache is in sync
+      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
     },
   });
 
@@ -58,7 +102,7 @@ export function ShoppingCart({ isOpen, onClose, cartItems = [], isGuest = false 
     if (isGuest) {
       updateGuestQuantity(item.id, newQuantity);
     } else {
-      updateQuantityMutation.mutate({ productId: item.productId, quantity: newQuantity });
+      updateQuantityMutation.mutate({ cartItemId: Number(item.id), quantity: newQuantity });
     }
   };
 
@@ -66,7 +110,7 @@ export function ShoppingCart({ isOpen, onClose, cartItems = [], isGuest = false 
     if (isGuest) {
       removeFromGuestCart(item.id);
     } else {
-      removeItemMutation.mutate(item.productId);
+      removeItemMutation.mutate(Number(item.id));
     }
   };
 

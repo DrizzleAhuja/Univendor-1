@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -11,7 +11,7 @@ import { CheckoutModal } from "@/components/checkout-modal";
 import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useGuestCart } from "@/hooks/useGuestCart";
-import { X } from "lucide-react";
+import { X, ShoppingCart as ShoppingCartIcon } from "lucide-react";
 
 // Dummy products data with color variants
 const dummyProducts = {
@@ -296,20 +296,134 @@ function ProductCard({ product, onGuestAddToCart, guestAddToCart }) {
 export default function Storefront() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
-  const { cartItems: guestCartItems, addToCart: addToGuestCart } = useGuestCart();
+  const { cartItems: guestCartItems, addToCart: addToGuestCart, removeFromCart: removeGuestCartItem, updateQuantity: updateGuestCartQuantity } = useGuestCart();
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("electronics");
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedColor, setSelectedColor] = useState("");
   const [search, setSearch] = useState("");
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
   const { data: cartItems = [] } = useQuery({
     queryKey: ["/api/cart"],
     enabled: isAuthenticated,
   });
 
-  const items = isAuthenticated ? cartItems : guestCartItems;
-  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+  // Optimistic update for logged-in cart
+  const [optimisticCart, setOptimisticCart] = useState<any[]>([]);
+  // Use optimistic cart if logged in, else use items from query
+  const displayItems = isAuthenticated ? (optimisticCart.length ? optimisticCart : cartItems) : guestCartItems;
+
+  // Sync optimistic cart with backend after mutation
+  const syncCart = async () => {
+    setOptimisticCart([]);
+    await queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+  };
+
+  // Cart mutations for logged-in users
+  const removeFromCartMutation = useMutation({
+    mutationFn: async (cartItemId: number) => {
+      const response = await fetch(`/api/cart/${cartItemId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to remove item");
+      }
+      return response.json();
+    },
+    onMutate: async (cartItemId) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["/api/cart"] });
+
+      // Snapshot the previous value
+      const previousCart = queryClient.getQueryData(["/api/cart"]);
+
+      // Optimistically update to the new value
+      queryClient.setQueryData(["/api/cart"], (old: any) => 
+        old.filter((item: any) => Number(item.id) !== cartItemId)
+      );
+
+      // Return a context object with the snapshotted value
+      return { previousCart };
+    },
+    onError: (err, cartItemId, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      queryClient.setQueryData(["/api/cart"], context?.previousCart);
+      toast({
+        title: "Error",
+        description: err.message || "Failed to remove item",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure cache is in sync
+      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+    },
+  });
+
+  const updateQuantityMutation = useMutation({
+    mutationFn: async ({ cartItemId, quantity }: { cartItemId: number; quantity: number }) => {
+      const response = await fetch(`/api/cart/${cartItemId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ quantity }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update quantity");
+      }
+      return response.json();
+    },
+    onMutate: async ({ cartItemId, quantity }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["/api/cart"] });
+
+      // Snapshot the previous value
+      const previousCart = queryClient.getQueryData(["/api/cart"]);
+
+      // Optimistically update to the new value
+      queryClient.setQueryData(["/api/cart"], (old: any) =>
+        old.map((item: any) =>
+          Number(item.id) === cartItemId ? { ...item, quantity } : item
+        )
+      );
+
+      // Return a context object with the snapshotted value
+      return { previousCart };
+    },
+    onError: (err, variables, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      queryClient.setQueryData(["/api/cart"], context?.previousCart);
+      toast({
+        title: "Error",
+        description: err.message || "Failed to update quantity",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure cache is in sync
+      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+    },
+  });
+
+  // For logged-in users: remove item in local state, then backend
+  const handleRemoveLoggedIn = (itemId: number|string) => {
+    const idNum = Number(itemId);
+    removeFromCartMutation.mutate(idNum);
+  };
+
+  // For logged-in users: update quantity in local state, then backend
+  const handleUpdateQuantityLoggedIn = (itemId: number|string, quantity: number) => {
+    const idNum = Number(itemId);
+    updateQuantityMutation.mutate({ cartItemId: idNum, quantity });
+  };
+
+  const totalItems = displayItems.reduce((sum, item) => sum + item.quantity, 0);
 
   // Flatten all products for search
   const allProducts = [
@@ -333,9 +447,42 @@ export default function Storefront() {
   // If searching and no products found
   const noProductsFound = search.trim() && (!filteredProducts || filteredProducts.length === 0);
 
+  // Calculate totals for logged-in users
+  const calculateTotal = () => {
+    if (!isAuthenticated) {
+      return displayItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
+    }
+    return displayItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  };
+
+  // Handle checkout modal
+  const handleCheckout = () => setIsCheckoutOpen(true);
+  const handleOrderComplete = () => {
+    setIsCheckoutOpen(false);
+    queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+  };
+
+  // Remove item for guest cart
+  const handleRemoveItem = (itemId: string) => {
+    removeGuestCartItem(itemId);
+  };
+
+  // Update quantity for guest cart
+  const handleUpdateQuantity = (itemId: string, quantity: number) => {
+    updateGuestCartQuantity(itemId, quantity);
+  };
+
+  // After login or cart migration, always refetch cart and clear optimistic cart
+  useEffect(() => {
+    if (isAuthenticated) {
+      setOptimisticCart([]);
+      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+    }
+  }, [isAuthenticated]);
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Flipkart-style Navbar */}
+      {/* Flipkart-style Navbar with Cart Icon */}
       <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-16 gap-4">
@@ -354,15 +501,49 @@ export default function Storefront() {
                 style={{ minWidth: 200 }}
               />
             </div>
-            {/* Login Button */}
-            <div className="flex items-center ml-8">
-              <Button
-                onClick={() => window.location.href = "/login"}
-                size="sm"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded"
+            {/* Cart Icon and Auth Buttons */}
+            <div className="flex items-center ml-8 gap-4">
+              {/* Cart Icon Button */}
+              <button
+                className="relative p-2 rounded hover:bg-gray-100 transition"
+                onClick={() => setIsCartOpen(true)}
+                aria-label="View Cart"
               >
-                Login
-              </Button>
+                <ShoppingCartIcon className="h-6 w-6 text-blue-700" />
+                {totalItems > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 font-bold">
+                    {totalItems}
+                  </span>
+                )}
+              </button>
+              {/* Auth Buttons */}
+              {isAuthenticated ? (
+                <>
+                  <div className="flex items-center space-x-2">
+                    <Avatar className="w-8 h-8">
+                      <AvatarImage src={user?.profileImageUrl || undefined} />
+                      <AvatarFallback>
+                        {user?.firstName?.[0] || user?.email?.[0] || 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => window.location.href = "/api/logout"}
+                    >
+                      Logout
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <Button
+                  onClick={() => window.location.href = "/login"}
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded"
+                >
+                  Login
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -436,7 +617,7 @@ export default function Storefront() {
       </div>
 
       {/* Shopping Cart Sidebar */}
-      <div className={`w-80 bg-white border-l border-gray-200 fixed right-0 top-0 h-full transform transition-transform duration-300 ease-in-out ${isCartOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`w-96 bg-white border-l border-gray-200 fixed right-0 top-0 h-full transform transition-transform duration-300 ease-in-out z-50 ${isCartOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="p-4 border-b">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold">Shopping Cart ({totalItems} items)</h2>
@@ -449,65 +630,109 @@ export default function Storefront() {
           </div>
         </div>
 
-        <div className="p-4 overflow-y-auto h-[calc(100vh-8rem)]">
-          {items.length === 0 ? (
-            <div className="text-center py-8">
-              <ShoppingCart className="h-12 w-12 mx-auto text-gray-400" />
-              <p className="mt-4 text-gray-500">Your cart is empty</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {items.map((item) => (
-                <div key={item.id} className="flex gap-4 p-4 border rounded-lg">
+        {displayItems.length === 0 ? (
+          <div className="p-8 text-center">
+            <ShoppingCart className="h-12 w-12 mx-auto text-gray-400" />
+            <p className="mt-4 text-gray-500">Your cart is empty</p>
+          </div>
+        ) : (
+          <div className="flex flex-col h-[calc(100vh-8rem)]">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {displayItems.map((item) => (
+                <div key={item.id} className="flex gap-4 p-4 border rounded-lg items-center">
                   <img
-                    src={item.imageUrl}
-                    alt={item.name}
+                    src={isAuthenticated ? (item.product.imageUrl || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=80&h=80&fit=crop") : item.imageUrl}
+                    alt={isAuthenticated ? item.product.name : item.name}
                     className="w-20 h-20 object-cover rounded"
                   />
                   <div className="flex-1">
-                    <h3 className="font-medium">{item.name}</h3>
+                    <h3 className="font-medium">{isAuthenticated ? item.product.name : item.name}</h3>
                     <p className="text-sm text-gray-500">
-                      {item.size && `Size: ${item.size}`}
-                      {item.color && ` • Color: ${item.color}`}
+                      {item.size && `Size: ${item.size}`} {item.color && `• Color: ${item.color}`}
                     </p>
-                    <div className="flex justify-between items-center mt-2">
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="p-1 border rounded"
-                          onClick={() => handleUpdateQuantity(item.id, Math.max(1, item.quantity - 1))}
-                        >
-                          -
-                        </button>
-                        <span>{item.quantity}</span>
-                        <button
-                          className="p-1 border rounded"
-                          onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <p className="font-medium">${parseFloat(item.price) * item.quantity}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        className="p-1 border rounded"
+                        onClick={() => {
+                          if (item.quantity > 1) {
+                            if (isAuthenticated) {
+                              handleUpdateQuantityLoggedIn(item.id, item.quantity - 1);
+                            } else {
+                              handleUpdateQuantity(item.id, Math.max(1, item.quantity - 1));
+                            }
+                          }
+                        }}
+                      >
+                        -
+                      </button>
+                      <span>{item.quantity}</span>
+                      <button
+                        className="p-1 border rounded"
+                        onClick={() => {
+                          if (isAuthenticated) {
+                            handleUpdateQuantityLoggedIn(item.id, item.quantity + 1);
+                          } else {
+                            handleUpdateQuantity(item.id, item.quantity + 1);
+                          }
+                        }}
+                      >
+                        +
+                      </button>
                     </div>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <p className="font-medium">
+                      {isAuthenticated
+                        ? `₹${(item.product.price * item.quantity).toFixed(2)}`
+                        : `$${(parseFloat(item.price) * item.quantity).toFixed(2)}`}
+                    </p>
+                    <button
+                      className="text-red-500 text-xs mt-2"
+                      onClick={() => {
+                        if (isAuthenticated) {
+                          handleRemoveLoggedIn(item.id);
+                        } else {
+                          handleRemoveItem(item.id);
+                        }
+                      }}
+                    >
+                      Remove
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
-
-        {items.length > 0 && (
-          <div className="p-4 border-t">
-            <div className="flex justify-between mb-4">
-              <span>Total</span>
-              <span className="font-medium">
-                ${items.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0).toFixed(2)}
-              </span>
+            {/* Cart Summary and Checkout */}
+            <div className="p-4 border-t">
+              <div className="flex justify-between mb-2">
+                <span>Subtotal</span>
+                <span>{isAuthenticated ? `₹${calculateTotal().toFixed(2)}` : `$${calculateTotal().toFixed(2)}`}</span>
+              </div>
+              <div className="flex justify-between mb-2">
+                <span>Shipping</span>
+                <span>{isAuthenticated ? `₹9.99` : `$9.99`}</span>
+              </div>
+              <div className="flex justify-between mb-4">
+                <span>Tax (8%)</span>
+                <span>{isAuthenticated ? `₹${(calculateTotal() * 0.08).toFixed(2)}` : `$${(calculateTotal() * 0.08).toFixed(2)}`}</span>
+              </div>
+              <div className="flex justify-between font-bold text-lg mb-4">
+                <span>Total</span>
+                <span>{isAuthenticated ? `₹${(calculateTotal() + 9.99 + (calculateTotal() * 0.08)).toFixed(2)}` : `$${(calculateTotal() + 9.99 + (calculateTotal() * 0.08)).toFixed(2)}`}</span>
+              </div>
+              <Button className="w-full" size="lg" onClick={handleCheckout}>
+                Proceed to Checkout
+              </Button>
             </div>
-            <Button className="w-full" onClick={() => window.location.href = "/cart"}>
-              View Cart
-            </Button>
           </div>
         )}
+        {/* Checkout Modal */}
+        <CheckoutModal
+          isOpen={isCheckoutOpen}
+          onClose={() => setIsCheckoutOpen(false)}
+          cartItems={displayItems}
+          onOrderComplete={handleOrderComplete}
+        />
       </div>
     </div>
   );

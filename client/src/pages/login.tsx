@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,24 @@ import { z } from "zod";
 import { useLocation } from "wouter";
 
 type LoginStep = "email" | "otp" | "register";
+
+// Helper to migrate guest cart to user cart
+async function migrateGuestCartToUserCart() {
+  try {
+    const guestCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
+    if (guestCart.length > 0) {
+      for (const item of guestCart) {
+        await apiRequest("POST", "/api/cart", {
+          productId: item.productId,
+          quantity: item.quantity,
+          size: item.size,
+          color: item.color,
+        });
+      }
+      localStorage.removeItem('guest_cart');
+    }
+  } catch {}
+}
 
 export default function Login() {
   const [step, setStep] = useState<LoginStep>("email");
@@ -77,7 +95,7 @@ export default function Login() {
       const response = await apiRequest("POST", "/api/auth/verify-otp", data);
       return await response.json();
     },
-    onSuccess: (data: any) => {
+    onSuccess: async (data: any) => {
       if (data.requiresRegistration) {
         // New user needs to register
         setStep("register");
@@ -92,10 +110,11 @@ export default function Login() {
           title: "Login Successful",
           description: "Welcome back!",
         });
+        await migrateGuestCartToUserCart();
         queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
         // Redirect based on user role
         if (data.user.role === 'buyer') {
-          setLocation("/buyer-dashboard");
+          setLocation("/");
         } else if (data.user.role === 'seller') {
           setLocation("/seller");
         } else if (data.user.role === 'super_admin') {
@@ -119,14 +138,15 @@ export default function Login() {
     mutationFn: async (data: z.infer<typeof registerUserSchema>) => {
       return await apiRequest("POST", "/api/auth/register", data);
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast({
         title: "Registration Successful",
         description: "Welcome to the platform!",
       });
+      await migrateGuestCartToUserCart();
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      // Redirect to buyer dashboard for new registrations
-      setLocation("/buyer-dashboard");
+      // Redirect to homepage for new registrations
+      setLocation("/");
     },
     onError: (error) => {
       toast({

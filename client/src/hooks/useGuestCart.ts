@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface CartItem {
   id: string;
@@ -12,28 +12,26 @@ interface CartItem {
 }
 
 export function useGuestCart() {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+    // Load from localStorage if available
+    try {
+      const stored = localStorage.getItem('guest_cart');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Save to localStorage on change
+  useEffect(() => {
+    localStorage.setItem('guest_cart', JSON.stringify(cartItems));
+  }, [cartItems]);
 
   const addToCart = (item: CartItem) => {
-    setCartItems(prevItems => {
-      const existingItem = prevItems.find(i => 
-        i.productId === item.productId && 
-        i.size === item.size && 
-        i.color === item.color
-      );
-
-      if (existingItem) {
-        return prevItems.map(i => 
-          i.productId === item.productId && 
-          i.size === item.size && 
-          i.color === item.color
-            ? { ...i, quantity: i.quantity + item.quantity }
-            : i
-        );
-      }
-
-      return [...prevItems, item];
-    });
+    setCartItems(prevItems => [
+      ...prevItems,
+      { ...item, id: Math.random().toString(36).substr(2, 9) }
+    ]);
   };
 
   const removeFromCart = (itemId: string) => {

@@ -17,8 +17,8 @@ export default function Cart() {
   });
 
   const removeFromCartMutation = useMutation({
-    mutationFn: async (productId: number) => {
-      await apiRequest("DELETE", `/api/cart/${productId}`);
+    mutationFn: async (cartItemId: number) => {
+      await apiRequest("DELETE", `/api/cart/${cartItemId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
@@ -37,8 +37,8 @@ export default function Cart() {
   });
 
   const updateQuantityMutation = useMutation({
-    mutationFn: async ({ productId, quantity }: { productId: number; quantity: number }) => {
-      await apiRequest("PUT", `/api/cart/${productId}`, { quantity });
+    mutationFn: async ({ cartItemId, quantity }: { cartItemId: number; quantity: number }) => {
+      await apiRequest("PUT", `/api/cart/${cartItemId}`, { quantity });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
@@ -107,7 +107,7 @@ export default function Cart() {
                             onClick={() => {
                               if (item.quantity > 1) {
                                 updateQuantityMutation.mutate({
-                                  productId: item.productId,
+                                  cartItemId: item.id,
                                   quantity: item.quantity - 1
                                 });
                               }
@@ -121,7 +121,7 @@ export default function Cart() {
                             size="sm"
                             onClick={() => {
                               updateQuantityMutation.mutate({
-                                productId: item.productId,
+                                cartItemId: item.id,
                                 quantity: item.quantity + 1
                               });
                             }}
@@ -141,7 +141,7 @@ export default function Cart() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => removeFromCartMutation.mutate(item.productId)}
+                        onClick={() => removeFromCartMutation.mutate(item.id)}
                       >
                         Remove
                       </Button>

@@ -534,38 +534,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Extract color name from color object if it exists
       const colorName = color?.name || color;
 
-      // Check if item already exists with same size and color
-      const [existingItem] = await db
-        .select()
-        .from(cartItems)
-        .where(and(
-          eq(cartItems.userId, userId),
-          eq(cartItems.productId, productId),
-          eq(cartItems.size, size),
-          eq(cartItems.color, colorName)
-        ));
-
-      let item;
-      if (existingItem) {
-        // Update quantity
-        [item] = await db
-          .update(cartItems)
-          .set({ quantity: existingItem.quantity + quantity })
-          .where(eq(cartItems.id, existingItem.id))
-          .returning();
-      } else {
-        // Insert new item
-        [item] = await db
-          .insert(cartItems)
-          .values({
-            userId,
-            productId,
-            quantity,
-            size,
-            color: colorName
-          })
-          .returning();
-      }
+      // Always insert a new cart item (do not merge)
+      const [item] = await db
+        .insert(cartItems)
+        .values({
+          userId,
+          productId,
+          quantity,
+          size,
+          color: colorName
+        })
+        .returning();
 
       // Get the cart item with product details
       const [cartItem] = await db.select({
@@ -588,28 +567,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update cart item quantity
-  app.put('/api/cart/:productId', middlewareIsAuthenticated, async (req: any, res) => {
+  // Update cart item quantity by id
+  app.put('/api/cart/:id', middlewareIsAuthenticated, async (req: any, res) => {
     try {
       const userId = parseInt(req.user.userData.id);
       if (!userId) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const productId = parseInt(req.params.productId);
+      const cartItemId = parseInt(req.params.id);
       const { quantity } = req.body;
 
       if (quantity < 1) {
         return res.status(400).json({ error: 'Quantity must be at least 1' });
       }
 
-      // Update the cart item
+      // Update the cart item by id
       const [updated] = await db.update(cartItems)
         .set({ quantity })
         .where(
           and(
             eq(cartItems.userId, userId),
-            eq(cartItems.productId, productId)
+            eq(cartItems.id, cartItemId)
           )
         )
         .returning();
@@ -639,22 +618,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Remove item from cart
-  app.delete('/api/cart/:productId', middlewareIsAuthenticated, async (req: any, res) => {
+  // Remove item from cart by id
+  app.delete('/api/cart/:id', middlewareIsAuthenticated, async (req: any, res) => {
     try {
       const userId = parseInt(req.user.userData.id);
       if (!userId) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const productId = parseInt(req.params.productId);
+      const cartItemId = parseInt(req.params.id);
 
-      // Delete the cart item
+      // Delete the cart item by id
       const result = await db.delete(cartItems)
         .where(
           and(
             eq(cartItems.userId, userId),
-            eq(cartItems.productId, productId)
+            eq(cartItems.id, cartItemId)
           )
         );
 
