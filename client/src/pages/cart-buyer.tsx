@@ -7,9 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { useGuestCart } from "@/hooks/useGuestCart";
 import { CheckoutModal } from "@/components/checkout-modal";
-import { Link } from "wouter";
 
-export default function Cart() {
+export default function CartBuyer() {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -83,7 +82,7 @@ export default function Cart() {
 
   const calculateTotal = () => {
     if (isAuthenticated) {
-      return displayItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+      return displayItems.reduce((sum, item) => sum + (Number(item.product.price) * item.quantity), 0);
     }
     return getGuestCartTotal();
   };
@@ -165,13 +164,13 @@ export default function Cart() {
                     <div className="text-right">
                       <p className="text-lg font-bold text-gray-900">
                         ₹{isAuthenticated 
-                          ? (item.product.price * item.quantity).toFixed(2)
+                          ? (Number(item.product.price) * item.quantity).toFixed(2)
                           : (parseFloat(item.price) * item.quantity).toFixed(2)
                         }
                       </p>
                       <p className="text-sm text-gray-500">
                         ₹{isAuthenticated 
-                          ? item.product.price.toFixed(2)
+                          ? Number(item.product.price).toFixed(2)
                           : parseFloat(item.price).toFixed(2)
                         } each
                       </p>

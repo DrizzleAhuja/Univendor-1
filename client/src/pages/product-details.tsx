@@ -97,7 +97,7 @@ export default function ProductDetails() {
     setSelectedColor(product.colors[0]);
   }
 
-  const discount = Math.round(((product.mrp - product.price) / product.mrp) * 100);
+  const discount = product.mrp ? Math.round(((product.mrp - product.price) / product.mrp) * 100) : 0;
 
   const handleAddToCart = () => {
     if (!selectedColor) {
@@ -141,7 +141,7 @@ export default function ProductDetails() {
 
   const handleBuyNow = () => {
     handleAddToCart();
-    // TODO: Navigate to checkout
+    setIsCheckoutOpen(true);
   };
 
   // Calculate total items in cart
@@ -225,8 +225,12 @@ export default function ProductDetails() {
 
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-bold text-gray-900">₹{product.price}</span>
-              <span className="text-lg text-gray-500 line-through">₹{product.mrp}</span>
-              <span className="text-sm font-medium text-green-600">{discount}% off</span>
+              {product.mrp && (
+                <>
+                  <span className="text-lg text-gray-500 line-through">₹{product.mrp}</span>
+                  <span className="text-sm font-medium text-green-600">{discount}% off</span>
+                </>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
@@ -334,17 +338,76 @@ export default function ProductDetails() {
               </Button>
             </div>
 
-            {/* Description */}
+            {/* Product Details */}
             <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-2">Description</h3>
-              <p className={`text-sm text-gray-600 ${!showFullDescription && "line-clamp-3"}`}>
-                {product.description}
-              </p>
+              <h3 className="text-sm font-medium text-gray-900 mb-2">Product Details</h3>
+              <div className={`text-sm text-gray-600 ${!showFullDescription ? "max-h-[120px] overflow-hidden" : ""}`}>
+                <ul className="space-y-2">
+                  <li className="flex">
+                    <span className="font-medium w-32">Brand:</span>
+                    <span>{product.vendor}</span>
+                  </li>
+                  <li className="flex">
+                    <span className="font-medium w-32">Model:</span>
+                    <span>{product.name}</span>
+                  </li>
+                  {product.sizes && (
+                    <li className="flex">
+                      <span className="font-medium w-32">Available Sizes:</span>
+                      <span>{product.sizes.join(", ")}</span>
+                    </li>
+                  )}
+                  <li className="flex">
+                    <span className="font-medium w-32">Colors:</span>
+                    <span>{product.colors.map(c => c.name).join(", ")}</span>
+                  </li>
+                  <li className="flex">
+                    <span className="font-medium w-32">Rating:</span>
+                    <span>{product.rating} ({product.reviews} reviews)</span>
+                  </li>
+                  <li className="flex">
+                    <span className="font-medium w-32">Price:</span>
+                    <span>₹{product.price}</span>
+                  </li>
+                  {product.mrp && (
+                    <li className="flex">
+                      <span className="font-medium w-32">MRP:</span>
+                      <span>₹{product.mrp}</span>
+                    </li>
+                  )}
+                  <li className="flex">
+                    <span className="font-medium w-32">Description:</span>
+                    <span>{product.description}</span>
+                  </li>
+                  <li className="flex">
+                    <span className="font-medium w-32">Warranty:</span>
+                    <span>1 Year Manufacturer Warranty</span>
+                  </li>
+                  <li className="flex">
+                    <span className="font-medium w-32">Return Policy:</span>
+                    <span>7 Days Easy Return</span>
+                  </li>
+                  <li className="flex">
+                    <span className="font-medium w-32">Delivery:</span>
+                    <span>Free Delivery</span>
+                  </li>
+                </ul>
+              </div>
               <button
-                className="text-sm text-primary hover:underline mt-1"
+                className="text-sm text-primary hover:underline mt-2 flex items-center gap-1"
                 onClick={() => setShowFullDescription(!showFullDescription)}
               >
-                {showFullDescription ? "Show Less" : "Show More"}
+                {showFullDescription ? (
+                  <>
+                    <span>Show Less</span>
+                    <i className="fas fa-chevron-up text-xs"></i>
+                  </>
+                ) : (
+                  <>
+                    <span>Show More</span>
+                    <i className="fas fa-chevron-down text-xs"></i>
+                  </>
+                )}
               </button>
             </div>
           </div>
