@@ -1,26 +1,55 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
 import { useGuestCart } from "@/hooks/useGuestCart";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ShoppingCartIcon } from "lucide-react";
+import { ShoppingCart } from "lucide-react";
+import { ShoppingCart as ShoppingCartComponent } from "@/components/shopping-cart";
+import { useQuery } from "@tanstack/react-query";
+
+// Custom event type for cart updates
+const CART_UPDATE_EVENT = 'guest-cart-update';
 
 export function Navbar() {
   const { user, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const { cartItems: guestCartItems, getCartItemsCount } = useGuestCart();
+  const [cartCount, setCartCount] = useState(0);
 
-  // Get cart items for both authenticated and guest users
+  // Get cart items for authenticated users
   const { data: cartItems = [] } = useQuery({
     queryKey: ["/api/cart"],
     enabled: isAuthenticated,
   });
 
-  const { cartItems: guestCartItems } = useGuestCart();
+  // Update cart count whenever items change
+  useEffect(() => {
+    const count = isAuthenticated 
+      ? (cartItems || []).reduce((sum, item) => sum + (item.quantity || 0), 0)
+      : getCartItemsCount();
+    setCartCount(count);
+  }, [cartItems, guestCartItems, isAuthenticated, getCartItemsCount]);
+
+  // Listen for guest cart updates
+  useEffect(() => {
+    const handleCartUpdate = (event: CustomEvent) => {
+      if (!isAuthenticated) {
+        const count = getCartItemsCount();
+        setCartCount(count);
+      }
+    };
+
+    window.addEventListener(CART_UPDATE_EVENT, handleCartUpdate as EventListener);
+    return () => {
+      window.removeEventListener(CART_UPDATE_EVENT, handleCartUpdate as EventListener);
+    };
+  }, [isAuthenticated, getCartItemsCount]);
+
+  // Get display items based on auth state
   const displayItems = isAuthenticated ? cartItems : guestCartItems;
-  const totalItems = displayItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,18 +81,19 @@ export function Navbar() {
 
           {/* Cart Icon and Auth Buttons */}
           <div className="flex items-center ml-8 gap-4">
-            <button
-              className="relative p-2 rounded hover:bg-gray-100 transition"
-              aria-label="View Cart"
-              onClick={() => setLocation('/cart-buyer')}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative"
+              onClick={() => setLocation("/cart-buyer")}
             >
-              <ShoppingCartIcon className="h-6 w-6" />
-              {totalItems > 0 && (
-                <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                  {totalItems}
+              <ShoppingCart className="h-5 w-5" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {cartCount}
                 </span>
               )}
-            </button>
+            </Button>
 
             {/* Auth Buttons */}
             {isAuthenticated ? (
@@ -94,6 +124,14 @@ export function Navbar() {
           </div>
         </div>
       </div>
+
+      {/* Shopping Cart Sidebar */}
+      <ShoppingCartComponent
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        cartItems={displayItems}
+        isGuest={!isAuthenticated}
+      />
     </header>
   );
 } 
