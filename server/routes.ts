@@ -531,6 +531,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Product not found (productId: " + productId + ")" });
       }
 
+      // Extract color name from color object if it exists
+      const colorName = color?.name || color;
+
       // Check if item already exists with same size and color
       const [existingItem] = await db
         .select()
@@ -539,7 +542,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(cartItems.userId, userId),
           eq(cartItems.productId, productId),
           eq(cartItems.size, size),
-          eq(cartItems.color, color)
+          eq(cartItems.color, colorName)
         ));
 
       let item;
@@ -559,7 +562,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             productId,
             quantity,
             size,
-            color
+            color: colorName
           })
           .returning();
       }

@@ -42,18 +42,14 @@ function Router() {
     <Switch>
       {isLoading || !isAuthenticated ? (
         <>
-          <Route path="/" component={Landing} />
+          <Route path="/" component={Storefront} />
           <Route path="/login" component={Login} />
           <Route path="/store/:domain?" component={Storefront} />
           <Route path="/cart" component={Cart} />
         </>
       ) : (
         <>
-          <Route path="/" component={() => {
-            if (user?.role === 'super_admin') return <SuperAdminDashboard />;
-            if (user?.role === 'seller') return <SellerDashboard />;
-            return <Landing />;
-          }} />
+          <Route path="/" component={Storefront} />
           <Route path="/buyer-dashboard" component={BuyerDashboard} />
           <Route path="/admin" component={SuperAdminDashboard} />
           <Route path="/admin/users" component={AdminUsers} />

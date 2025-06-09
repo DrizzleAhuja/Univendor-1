@@ -93,7 +93,16 @@ export default function Login() {
           description: "Welcome back!",
         });
         queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-        setLocation("/");
+        // Redirect based on user role
+        if (data.user.role === 'buyer') {
+          setLocation("/buyer-dashboard");
+        } else if (data.user.role === 'seller') {
+          setLocation("/seller");
+        } else if (data.user.role === 'super_admin') {
+          setLocation("/admin");
+        } else {
+          setLocation("/");
+        }
       }
     },
     onError: (error) => {
@@ -110,13 +119,14 @@ export default function Login() {
     mutationFn: async (data: z.infer<typeof registerUserSchema>) => {
       return await apiRequest("POST", "/api/auth/register", data);
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
         title: "Registration Successful",
         description: "Welcome to the platform!",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      setLocation("/");
+      // Redirect to buyer dashboard for new registrations
+      setLocation("/buyer-dashboard");
     },
     onError: (error) => {
       toast({

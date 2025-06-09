@@ -301,6 +301,7 @@ export default function Storefront() {
   const [selectedCategory, setSelectedCategory] = useState("electronics");
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedColor, setSelectedColor] = useState("");
+  const [search, setSearch] = useState("");
 
   const { data: cartItems = [] } = useQuery({
     queryKey: ["/api/cart"],
@@ -310,110 +311,71 @@ export default function Storefront() {
   const items = isAuthenticated ? cartItems : guestCartItems;
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
 
-  const handleAddToCart = async (product: any) => {
-    if (!isAuthenticated) {
-      // Handle guest cart
-      addToGuestCart({
-        id: Math.random().toString(36).substr(2, 9),
-        productId: product.id,
-        quantity: 1,
-        price: product.price,
-        name: product.name,
-        imageUrl: product.imageUrl,
-        size: selectedSize,
-        color: selectedColor
-      });
-      toast({
-        title: "Added to Cart",
-        description: "Item has been added to your cart",
-      });
-      // Open cart sidebar after adding item
-      setIsCartOpen(true);
-      return;
-    }
+  // Flatten all products for search
+  const allProducts = [
+    ...dummyProducts.electronics,
+    ...dummyProducts.fashion,
+    ...dummyProducts.homeGarden,
+  ];
 
-    // Existing logged-in user cart logic
-    try {
-      const response = await fetch("/api/cart", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          productId: product.id,
-          quantity: 1,
-          size: selectedSize,
-          color: selectedColor,
-        }),
-        credentials: "include",
-      });
+  // Filter products by search
+  const filteredProducts = search.trim()
+    ? allProducts.filter((product) =>
+        product.name.toLowerCase().includes(search.trim().toLowerCase())
+      )
+    : null;
 
-      if (!response.ok) {
-        throw new Error("Failed to add to cart");
-      }
+  // If searching, show all categories with filtered products; else, show by selected category
+  const showProducts = search.trim()
+    ? filteredProducts
+    : dummyProducts[selectedCategory];
 
-      toast({
-        title: "Added to Cart",
-        description: "Item has been added to your cart",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add item to cart",
-        variant: "destructive",
-      });
-    }
-  };
+  // If searching and no products found
+  const noProductsFound = search.trim() && (!filteredProducts || filteredProducts.length === 0);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* Flipkart-style Navbar */}
       <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex items-center h-16 gap-4">
+            {/* Logo */}
             <Link href="/">
-              <h1 className="text-xl font-bold text-gray-900 cursor-pointer">SaaSCommerce</h1>
+              <h1 className="text-2xl font-bold text-blue-700 cursor-pointer mr-8">SaaSCommerce</h1>
             </Link>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center gap-4">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="relative"
-                  onClick={() => setIsCartOpen(true)}
-                >
-                  <ShoppingCart className="h-5 w-5" />
-                </Button>
-              </div>
-              {isAuthenticated ? (
-                <div className="flex items-center space-x-2">
-                  <Avatar className="w-8 h-8">
-                    <AvatarImage src={user?.profileImageUrl || undefined} />
-                    <AvatarFallback>
-                      {user?.firstName?.[0] || user?.email?.[0] || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => window.location.href = "/api/logout"}
-                  >
-                    Logout
-                  </Button>
-                </div>
-              ) : (
-                <Button 
-                  onClick={() => window.location.href = "/api/login"}
-                  size="sm"
-                >
-                  Login
-                </Button>
-              )}
+            {/* Search Bar */}
+            <div className="flex-1 flex justify-center">
+              <input
+                type="text"
+                placeholder="Search for products, brands and more"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full max-w-xl px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{ minWidth: 200 }}
+              />
+            </div>
+            {/* Login Button */}
+            <div className="flex items-center ml-8">
+              <Button
+                onClick={() => window.location.href = "/login"}
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded"
+              >
+                Login
+              </Button>
             </div>
           </div>
         </div>
       </header>
+
+      {/* No products found message */}
+      {noProductsFound && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded p-6 text-center text-lg font-semibold">
+            No product like this found
+          </div>
+        </div>
+      )}
 
       {/* Hero Section */}
       <div className="relative">
@@ -443,49 +405,34 @@ export default function Storefront() {
 
       {/* Products Section */}
       <div id="products" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <Tabs defaultValue="electronics" className="w-full">
-          <div className="flex flex-col items-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 text-center mb-8">Shop by Category</h2>
-            <TabsList className="grid w-full max-w-2xl grid-cols-3 gap-4">
-              <TabsTrigger value="electronics" className="py-3">
-                <i className="fas fa-laptop mr-2"></i>
-                Electronics
-              </TabsTrigger>
-              <TabsTrigger value="fashion" className="py-3">
-                <i className="fas fa-tshirt mr-2"></i>
-                Fashion
-              </TabsTrigger>
-              <TabsTrigger value="homeGarden" className="py-3">
-                <i className="fas fa-home mr-2"></i>
-                Home & Garden
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent value="electronics" className="mt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {dummyProducts.electronics.map((product) => (
-                <ProductCard key={product.id} product={product} onGuestAddToCart={() => setIsCartOpen(true)} guestAddToCart={addToGuestCart} />
-              ))}
+        {/* Only show category tabs if not searching */}
+        {!search.trim() && (
+          <Tabs defaultValue={selectedCategory} value={selectedCategory} onValueChange={setSelectedCategory} className="w-full">
+            <div className="flex flex-col items-center mb-12">
+              <h2 className="text-3xl font-bold text-gray-900 text-center mb-8">Shop by Category</h2>
+              <TabsList className="grid w-full max-w-2xl grid-cols-3 gap-4">
+                <TabsTrigger value="electronics" className="py-3">
+                  <i className="fas fa-laptop mr-2"></i>
+                  Electronics
+                </TabsTrigger>
+                <TabsTrigger value="fashion" className="py-3">
+                  <i className="fas fa-tshirt mr-2"></i>
+                  Fashion
+                </TabsTrigger>
+                <TabsTrigger value="homeGarden" className="py-3">
+                  <i className="fas fa-home mr-2"></i>
+                  Home & Garden
+                </TabsTrigger>
+              </TabsList>
             </div>
-          </TabsContent>
-
-          <TabsContent value="fashion" className="mt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {dummyProducts.fashion.map((product) => (
-                <ProductCard key={product.id} product={product} onGuestAddToCart={() => setIsCartOpen(true)} guestAddToCart={addToGuestCart} />
-              ))}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="homeGarden" className="mt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {dummyProducts.homeGarden.map((product) => (
-                <ProductCard key={product.id} product={product} onGuestAddToCart={() => setIsCartOpen(true)} guestAddToCart={addToGuestCart} />
-              ))}
-            </div>
-          </TabsContent>
-        </Tabs>
+          </Tabs>
+        )}
+        {/* Products Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {showProducts && showProducts.length > 0 && showProducts.map((product) => (
+            <ProductCard key={product.id} product={product} onGuestAddToCart={() => setIsCartOpen(true)} guestAddToCart={addToGuestCart} />
+          ))}
+        </div>
       </div>
 
       {/* Shopping Cart Sidebar */}

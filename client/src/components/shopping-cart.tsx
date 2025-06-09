@@ -3,17 +3,20 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useGuestCart } from "@/hooks/useGuestCart";
+import { useAuth } from "@/hooks/useAuth";
 
 interface ShoppingCartProps {
   isOpen: boolean;
   onClose: () => void;
-  onCheckout: () => void;
   cartItems: any[];
-  refetchCart: () => void;
+  isGuest?: boolean;
 }
 
-export function ShoppingCart({ isOpen, onClose, onCheckout, cartItems = [], refetchCart }: ShoppingCartProps) {
+export function ShoppingCart({ isOpen, onClose, cartItems = [], isGuest = false }: ShoppingCartProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const { updateQuantity: updateGuestQuantity, removeFromCart: removeFromGuestCart, getCartTotal: getGuestCartTotal } = useGuestCart();
 
   const updateQuantityMutation = useMutation({
     mutationFn: async ({ productId, quantity }: { productId: number; quantity: number }) => {
@@ -51,18 +54,33 @@ export function ShoppingCart({ isOpen, onClose, onCheckout, cartItems = [], refe
     },
   });
 
-  const total = (cartItems || []).reduce((sum, item) => 
-    sum + ((item?.product?.price ? parseFloat(item.product.price) : 0) * (item?.quantity || 0)), 0
-  );
+  const handleUpdateQuantity = (item: any, newQuantity: number) => {
+    if (isGuest) {
+      updateGuestQuantity(item.id, newQuantity);
+    } else {
+      updateQuantityMutation.mutate({ productId: item.productId, quantity: newQuantity });
+    }
+  };
+
+  const handleRemoveItem = (item: any) => {
+    if (isGuest) {
+      removeFromGuestCart(item.id);
+    } else {
+      removeItemMutation.mutate(item.productId);
+    }
+  };
+
+  const total = isGuest 
+    ? getGuestCartTotal()
+    : cartItems.reduce((sum, item) => sum + ((item?.product?.price ? parseFloat(item.product.price) : 0) * (item?.quantity || 0)), 0);
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
-      <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose}></div>
-      <div className="fixed right-0 top-0 h-full w-96 bg-white shadow-xl transform transition-transform">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-end">
+      <div className="w-full max-w-md bg-white h-full shadow-xl">
         <Card className="h-full flex flex-col">
-          <CardHeader className="border-b border-gray-200">
+          <CardHeader className="flex-none">
             <div className="flex justify-between items-center">
               <CardTitle>Shopping Cart</CardTitle>
               <Button variant="ghost" size="sm" onClick={onClose}>
@@ -70,8 +88,8 @@ export function ShoppingCart({ isOpen, onClose, onCheckout, cartItems = [], refe
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto p-6">
-            {!cartItems || cartItems.length === 0 ? (
+          <CardContent className="flex-1 overflow-y-auto">
+            {cartItems.length === 0 ? (
               <div className="text-center py-8">
                 <i className="fas fa-shopping-cart text-gray-400 text-4xl mb-4"></i>
                 <p className="text-gray-600">Your cart is empty</p>
@@ -94,10 +112,7 @@ export function ShoppingCart({ isOpen, onClose, onCheckout, cartItems = [], refe
                         <Button 
                           variant="outline" 
                           size="sm"
-                          onClick={() => updateQuantityMutation.mutate({ 
-                            productId: item.productId, 
-                            quantity: Math.max(1, (item.quantity || 1) - 1)
-                          })}
+                          onClick={() => handleUpdateQuantity(item, Math.max(1, (item.quantity || 1) - 1))}
                           disabled={updateQuantityMutation.isPending || (item.quantity || 0) <= 1}
                         >
                           <i className="fas fa-minus"></i>
@@ -106,10 +121,7 @@ export function ShoppingCart({ isOpen, onClose, onCheckout, cartItems = [], refe
                         <Button 
                           variant="outline" 
                           size="sm"
-                          onClick={() => updateQuantityMutation.mutate({ 
-                            productId: item.productId, 
-                            quantity: (item.quantity || 0) + 1 
-                          })}
+                          onClick={() => handleUpdateQuantity(item, (item.quantity || 0) + 1)}
                           disabled={updateQuantityMutation.isPending}
                         >
                           <i className="fas fa-plus"></i>
@@ -119,7 +131,7 @@ export function ShoppingCart({ isOpen, onClose, onCheckout, cartItems = [], refe
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      onClick={() => removeItemMutation.mutate(item.productId)}
+                      onClick={() => handleRemoveItem(item)}
                       disabled={removeItemMutation.isPending}
                     >
                       <i className="fas fa-trash text-red-500"></i>
@@ -135,13 +147,28 @@ export function ShoppingCart({ isOpen, onClose, onCheckout, cartItems = [], refe
                 <span className="text-lg font-semibold text-gray-900">Total:</span>
                 <span className="text-2xl font-bold text-primary">₹{total.toFixed(2)}</span>
               </div>
-              <Button 
-                onClick={onCheckout}
-                className="w-full"
-                size="lg"
-              >
-                Proceed to Checkout
-              </Button>
+              {isGuest ? (
+                <div className="space-y-4">
+                  <Button 
+                    className="w-full"
+                    size="lg"
+                    onClick={() => window.location.href = "/api/login"}
+                  >
+                    Login to Checkout
+                  </Button>
+                  <p className="text-sm text-gray-500 text-center">
+                    Please login to complete your purchase
+                  </p>
+                </div>
+              ) : (
+                <Button 
+                  className="w-full"
+                  size="lg"
+                  onClick={() => window.location.href = "/buyer/cart"}
+                >
+                  Proceed to Checkout
+                </Button>
+              )}
             </div>
           )}
         </Card>

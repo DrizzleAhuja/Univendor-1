@@ -125,7 +125,7 @@ export const cartItems = pgTable("cart_items", {
   productId: integer("product_id").notNull().references(() => products.id),
   quantity: integer("quantity").notNull().default(1),
   size: varchar("size", { length: 50 }),
-  color: varchar("color", { length: 50 }),
+  color: jsonb("color"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
